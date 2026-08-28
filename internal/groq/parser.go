@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
+	"time"
 
 	openai "github.com/sashabaranov/go-openai"
 )
@@ -126,6 +128,7 @@ type Parser struct {
 func NewParser() *Parser {
 	cfg := openai.DefaultConfig(os.Getenv("GROQ_API_KEY"))
 	cfg.BaseURL = groqBaseURL
+	cfg.HTTPClient = &http.Client{Timeout: 30 * time.Second}
 	return &Parser{client: openai.NewClientWithConfig(cfg)}
 }
 

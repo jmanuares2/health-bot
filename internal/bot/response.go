@@ -1,6 +1,7 @@
 package bot
 
 import (
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -37,6 +38,6 @@ func joinLines(lines []string) string {
 
 func toPgNumeric(f float64) pgtype.Numeric {
 	n := pgtype.Numeric{}
-	_ = n.Scan(f)
+	_ = n.Scan(strconv.FormatFloat(f, 'f', -1, 64))
 	return n
 }

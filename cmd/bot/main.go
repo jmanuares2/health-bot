@@ -62,7 +62,7 @@ func main() {
 	}
 
 	dbLog := waLog.Stdout("Database", "WARN", true)
-	container, err := sqlstore.New(ctx, "sqlite", fmt.Sprintf("file:%s/whatsmeow.db?_foreign_keys=on", sessionDir), dbLog)
+	container, err := sqlstore.New(ctx, "sqlite", fmt.Sprintf("file:%s/whatsmeow.db?_foreign_keys=on&_pragma=journal_mode%%3DWAL&_pragma=busy_timeout%%3D10000", sessionDir), dbLog)
 	if err != nil {
 		log.Fatalf("sqlstore: %v", err)
 	}
@@ -89,11 +89,18 @@ func main() {
 	client.AddEventHandler(func(evt interface{}) {
 		switch v := evt.(type) {
 		case *events.Message:
+			log.Printf("[DEBUG] msg from=%s chat=%s IsFromMe=%v text=%q",
+				v.Info.Sender, v.Info.Chat, v.Info.IsFromMe, extractText(v.Message))
 			// Only handle messages sent by the user themselves
 			if !v.Info.IsFromMe {
 				return
 			}
+			// Log all group JIDs to help identify the target group
+			if v.Info.Chat.Server == "g.us" {
+				log.Printf("[JID] Message in group: %s", v.Info.Chat.String())
+			}
 			// Only in the configured group
+			log.Printf("[DEBUG] chat=%+v groupJID=%+v equal=%v", v.Info.Chat, groupJID, v.Info.Chat == groupJID)
 			if v.Info.Chat != groupJID {
 				return
 			}
@@ -104,17 +111,18 @@ func main() {
 			}
 
 			log.Printf("Handling message: %q", text)
-			reply := handler.Handle(ctx, text)
-			if reply == "" {
-				return
-			}
-
-			_, err := client.SendMessage(ctx, groupJID, &waE2E.Message{
-				Conversation: proto.String(reply),
-			})
-			if err != nil {
-				log.Printf("send message error: %v", err)
-			}
+			go func(msg string) {
+				reply := handler.Handle(ctx, msg)
+				if reply == "" {
+					return
+				}
+				_, err := client.SendMessage(ctx, groupJID, &waE2E.Message{
+					Conversation: proto.String(reply),
+				})
+				if err != nil {
+					log.Printf("send message error: %v", err)
+				}
+			}(text)
 		}
 	})
 
