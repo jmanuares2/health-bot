@@ -1,0 +1,21 @@
+# Go
+/bin/
+*.exe
+*.test
+*.out
+
+# Session WhatsApp
+session/
+*.db
+
+# Environment
+.env
+
+# Next.js
+web/node_modules/
+web/.next/
+web/out/
+
+# OS
+.DS_Store
+Thumbs.db
