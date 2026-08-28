@@ -8,7 +8,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/mdp/qrterminal/v3"
+	_ "modernc.org/sqlite"
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/store/sqlstore"
@@ -61,7 +62,7 @@ func main() {
 	}
 
 	dbLog := waLog.Stdout("Database", "WARN", true)
-	container, err := sqlstore.New(ctx, "sqlite3", fmt.Sprintf("file:%s/whatsmeow.db?_foreign_keys=on", sessionDir), dbLog)
+	container, err := sqlstore.New(ctx, "sqlite", fmt.Sprintf("file:%s/whatsmeow.db?_foreign_keys=on", sessionDir), dbLog)
 	if err != nil {
 		log.Fatalf("sqlstore: %v", err)
 	}
@@ -126,8 +127,7 @@ func main() {
 		}
 		for evt := range qrChan {
 			if evt.Event == "code" {
-				log.Printf("QR code: %s", evt.Code)
-				// Optionally print QR to terminal using a library
+				qrterminal.GenerateHalfBlock(evt.Code, qrterminal.L, os.Stdout)
 			} else {
 				log.Printf("QR event: %s", evt.Event)
 			}
