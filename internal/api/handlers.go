@@ -13,13 +13,18 @@ const timezone = "America/Argentina/Buenos_Aires"
 
 // Handlers holds all API handler dependencies.
 type Handlers struct {
-	queries *db.Queries
-	userID  int32
+	queries     *db.Queries
+	userID      int32
+	calorieGoal int32
 }
 
 // NewHandlers creates an API handler set for the given user.
-func NewHandlers(queries *db.Queries, userID int32) *Handlers {
-	return &Handlers{queries: queries, userID: userID}
+func NewHandlers(queries *db.Queries, user db.User) *Handlers {
+	goal := user.CalorieGoal
+	if goal == 0 {
+		goal = 2000
+	}
+	return &Handlers{queries: queries, userID: user.ID, calorieGoal: goal}
 }
 
 func (h *Handlers) today() pgtype.Date {
@@ -35,75 +40,56 @@ func (h *Handlers) Today(c *gin.Context) {
 	ctx := c.Request.Context()
 	today := h.today()
 
-	calories, err := h.queries.GetDailyCalories(ctx, db.GetDailyCaloriesParams{
-		UserID: pgtype.Int4{Int32: h.userID, Valid: true},
-		Date:   today,
-	})
+	uid := pgtype.Int4{Int32: h.userID, Valid: true}
+
+	calories, err := h.queries.GetDailyCalories(ctx, db.GetDailyCaloriesParams{UserID: uid, Date: today})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	water, err := h.queries.GetDailyWater(ctx, db.GetDailyWaterParams{
-		UserID: pgtype.Int4{Int32: h.userID, Valid: true},
-		Date:   today,
-	})
+	waterTotal, err := h.queries.GetDailyWater(ctx, db.GetDailyWaterParams{UserID: uid, Date: today})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	food, err := h.queries.GetFoodEntriesByDate(ctx, db.GetFoodEntriesByDateParams{
-		UserID: pgtype.Int4{Int32: h.userID, Valid: true},
-		Date:   today,
-	})
+	food, err := h.queries.GetFoodEntriesByDate(ctx, db.GetFoodEntriesByDateParams{UserID: uid, Date: today})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	strength, err := h.queries.GetStrengthSessionsByDate(ctx, db.GetStrengthSessionsByDateParams{
-		UserID: pgtype.Int4{Int32: h.userID, Valid: true},
-		Date:   today,
-	})
+	strength, err := h.queries.GetStrengthSessionsByDate(ctx, db.GetStrengthSessionsByDateParams{UserID: uid, Date: today})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	cardio, err := h.queries.GetCardioSessionsByDate(ctx, db.GetCardioSessionsByDateParams{
-		UserID: pgtype.Int4{Int32: h.userID, Valid: true},
-		Date:   today,
-	})
+	cardio, err := h.queries.GetCardioSessionsByDate(ctx, db.GetCardioSessionsByDateParams{UserID: uid, Date: today})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	user, _ := h.queries.GetUserByPhone(ctx, "")
-	calorieGoal := int32(2000)
-	if user.CalorieGoal != 0 {
-		calorieGoal = user.CalorieGoal
-	}
-
-	waterTotal, _ := water.TotalLiters.Float64Value()
-	proteinTotal, _ := calories.TotalProtein.Float64Value()
-	carbsTotal, _ := calories.TotalCarbs.Float64Value()
-	fatTotal, _ := calories.TotalFat.Float64Value()
-	fiberTotal, _ := calories.TotalFiber.Float64Value()
+	waterF, _ := waterTotal.Float64Value()
+	proteinF, _ := calories.TotalProtein.Float64Value()
+	carbsF, _ := calories.TotalCarbs.Float64Value()
+	fatF, _ := calories.TotalFat.Float64Value()
+	fiberF, _ := calories.TotalFiber.Float64Value()
 
 	c.JSON(http.StatusOK, gin.H{
-		"date":          today.Time.Format("2006-01-02"),
-		"calorie_goal":  calorieGoal,
-		"calories":      calories.TotalCalories,
-		"protein_g":     proteinTotal.Float64,
-		"carbs_g":       carbsTotal.Float64,
-		"fat_g":         fatTotal.Float64,
-		"fiber_g":       fiberTotal.Float64,
-		"water_liters":  waterTotal.Float64,
-		"food_entries":  food,
-		"strength":      strength,
-		"cardio":        cardio,
+		"date":         today.Time.Format("2006-01-02"),
+		"calorie_goal": h.calorieGoal,
+		"calories":     calories.TotalCalories,
+		"protein_g":    proteinF.Float64,
+		"carbs_g":      carbsF.Float64,
+		"fat_g":        fatF.Float64,
+		"fiber_g":      fiberF.Float64,
+		"water_liters": waterF.Float64,
+		"food_entries": food,
+		"strength":     strength,
+		"cardio":       cardio,
 	})
 }
 
@@ -118,31 +104,27 @@ func (h *Handlers) Progress(c *gin.Context) {
 	monthDate := pgtype.Date{}
 	_ = monthDate.Scan(month + "-01")
 
+	uid := pgtype.Int4{Int32: h.userID, Valid: true}
+
 	calories, err := h.queries.GetMonthlyCalories(ctx, db.GetMonthlyCaloriesParams{
-		UserID: pgtype.Int4{Int32: h.userID, Valid: true},
-		Date:   monthDate,
+		UserID:  uid,
+		Column2: monthDate,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	weights, err := h.queries.GetBodyWeightHistory(ctx, pgtype.Int4{Int32: h.userID, Valid: true})
+	weights, err := h.queries.GetBodyWeightHistory(ctx, uid)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	user, _ := h.queries.GetUserByPhone(ctx, "")
-	calorieGoal := int32(2000)
-	if user.CalorieGoal != 0 {
-		calorieGoal = user.CalorieGoal
-	}
-
-	// Calculate adherence: % of days where calories <= goal
+	// Adherence: % of days where calories <= goal
 	daysOnTarget := 0
 	for _, day := range calories {
-		if day.TotalCalories <= calorieGoal {
+		if day.TotalCalories <= h.calorieGoal {
 			daysOnTarget++
 		}
 	}
@@ -174,9 +156,10 @@ func (h *Handlers) GymList(c *gin.Context) {
 func (h *Handlers) GymExercise(c *gin.Context) {
 	ctx := c.Request.Context()
 	exercise := c.Param("exercise")
+	uid := pgtype.Int4{Int32: h.userID, Valid: true}
 
 	history, err := h.queries.GetExerciseHistory(ctx, db.GetExerciseHistoryParams{
-		UserID:       pgtype.Int4{Int32: h.userID, Valid: true},
+		UserID:       uid,
 		ExerciseName: exercise,
 	})
 	if err != nil {
@@ -184,13 +167,12 @@ func (h *Handlers) GymExercise(c *gin.Context) {
 		return
 	}
 
-	prs, err := h.queries.GetMonthlyPRs(ctx, pgtype.Int4{Int32: h.userID, Valid: true})
+	prs, err := h.queries.GetMonthlyPRs(ctx, uid)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Filter PRs for this exercise
 	var exercisePRs []db.GetMonthlyPRsRow
 	for _, pr := range prs {
 		if pr.ExerciseName == exercise {

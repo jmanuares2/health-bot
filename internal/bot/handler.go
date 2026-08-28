@@ -12,24 +12,27 @@ import (
 	"github.com/jmanuares2/health-bot/internal/groq"
 )
 
-// timezone for date calculations
 const timezone = "America/Argentina/Buenos_Aires"
 
 // Handler routes incoming messages to the correct handler.
 type Handler struct {
-	parser  *groq.Parser
-	queries *db.Queries
-	pool    *pgxpool.Pool
-	userID  int32
+	parser      *groq.Parser
+	queries     *db.Queries
+	userID      int32
+	calorieGoal int32
 }
 
-// NewHandler creates a Handler. userID is the DB id of the single user.
-func NewHandler(parser *groq.Parser, pool *pgxpool.Pool, userID int32) *Handler {
+// NewHandler creates a Handler.
+func NewHandler(parser *groq.Parser, pool *pgxpool.Pool, user db.User) *Handler {
+	goal := user.CalorieGoal
+	if goal == 0 {
+		goal = 2000
+	}
 	return &Handler{
-		parser:  parser,
-		queries: db.New(pool),
-		pool:    pool,
-		userID:  userID,
+		parser:      parser,
+		queries:     db.New(pool),
+		userID:      user.ID,
+		calorieGoal: goal,
 	}
 }
 
@@ -80,9 +83,10 @@ func (h *Handler) handleFood(ctx context.Context, parsed *groq.ParsedMessage, to
 		return "No encontre datos de comida en el mensaje."
 	}
 	f := parsed.Food
+	uid := pgtype.Int4{Int32: h.userID, Valid: true}
 
 	_, err := h.queries.CreateFoodEntry(ctx, db.CreateFoodEntryParams{
-		UserID:      pgtype.Int4{Int32: h.userID, Valid: true},
+		UserID:      uid,
 		Date:        today,
 		MealType:    pgtype.Text{String: f.MealType, Valid: f.MealType != ""},
 		Description: f.Description,
@@ -97,22 +101,12 @@ func (h *Handler) handleFood(ctx context.Context, parsed *groq.ParsedMessage, to
 		return "Error guardando comida."
 	}
 
-	// Get daily totals for remaining calories
-	totals, err := h.queries.GetDailyCalories(ctx, db.GetDailyCaloriesParams{
-		UserID: pgtype.Int4{Int32: h.userID, Valid: true},
-		Date:   today,
-	})
+	totals, err := h.queries.GetDailyCalories(ctx, db.GetDailyCaloriesParams{UserID: uid, Date: today})
 	if err != nil {
 		log.Printf("getDailyCalories error: %v", err)
 	}
 
-	user, _ := h.queries.GetUserByPhone(ctx, "") // we use userID directly
-	calorieGoal := int32(2000)
-	if user.CalorieGoal != 0 {
-		calorieGoal = user.CalorieGoal
-	}
-
-	remaining := calorieGoal - totals.TotalCalories
+	remaining := h.calorieGoal - totals.TotalCalories
 	mealLabel := mealTypeLabel(f.MealType)
 
 	return fmt.Sprintf(
@@ -128,10 +122,11 @@ func (h *Handler) handleStrength(ctx context.Context, parsed *groq.ParsedMessage
 		return "No encontre ejercicios en el mensaje."
 	}
 
+	uid := pgtype.Int4{Int32: h.userID, Valid: true}
 	var replies []string
 	for _, ex := range parsed.Exercises {
 		_, err := h.queries.CreateStrengthSession(ctx, db.CreateStrengthSessionParams{
-			UserID:         pgtype.Int4{Int32: h.userID, Valid: true},
+			UserID:         uid,
 			Date:           today,
 			ExerciseName:   ex.Name,
 			Sets:           pgtype.Int4{Int32: int32(ex.Sets), Valid: ex.Sets > 0},
@@ -163,9 +158,10 @@ func (h *Handler) handleCardio(ctx context.Context, parsed *groq.ParsedMessage, 
 		return "No encontre datos de cardio en el mensaje."
 	}
 	c := parsed.Cardio
+	uid := pgtype.Int4{Int32: h.userID, Valid: true}
 
 	_, err := h.queries.CreateCardioSession(ctx, db.CreateCardioSessionParams{
-		UserID:         pgtype.Int4{Int32: h.userID, Valid: true},
+		UserID:         uid,
 		Date:           today,
 		Activity:       c.Activity,
 		DurationMin:    pgtype.Int4{Int32: int32(c.DurationMin), Valid: c.DurationMin > 0},
@@ -194,9 +190,10 @@ func (h *Handler) handleBodyWeight(ctx context.Context, parsed *groq.ParsedMessa
 	if parsed.BodyWeight == nil {
 		return "No encontre datos de peso en el mensaje."
 	}
+	uid := pgtype.Int4{Int32: h.userID, Valid: true}
 
 	_, err := h.queries.CreateBodyWeight(ctx, db.CreateBodyWeightParams{
-		UserID:   pgtype.Int4{Int32: h.userID, Valid: true},
+		UserID:   uid,
 		Date:     today,
 		WeightKg: toPgNumeric(parsed.BodyWeight.WeightKg),
 	})
@@ -212,9 +209,10 @@ func (h *Handler) handleWater(ctx context.Context, parsed *groq.ParsedMessage, t
 	if parsed.Water == nil {
 		return "No encontre datos de agua en el mensaje."
 	}
+	uid := pgtype.Int4{Int32: h.userID, Valid: true}
 
 	_, err := h.queries.CreateWaterLog(ctx, db.CreateWaterLogParams{
-		UserID: pgtype.Int4{Int32: h.userID, Valid: true},
+		UserID: uid,
 		Date:   today,
 		Liters: toPgNumeric(parsed.Water.Liters),
 	})
@@ -223,15 +221,12 @@ func (h *Handler) handleWater(ctx context.Context, parsed *groq.ParsedMessage, t
 		return "Error guardando agua."
 	}
 
-	total, err := h.queries.GetDailyWater(ctx, db.GetDailyWaterParams{
-		UserID: pgtype.Int4{Int32: h.userID, Valid: true},
-		Date:   today,
-	})
+	totalNum, err := h.queries.GetDailyWater(ctx, db.GetDailyWaterParams{UserID: uid, Date: today})
 	if err != nil {
 		log.Printf("getDailyWater error: %v", err)
 		return fmt.Sprintf("✅ +%.1fL registrados", parsed.Water.Liters)
 	}
 
-	totalF, _ := total.TotalLiters.Float64Value()
+	totalF, _ := totalNum.Float64Value()
 	return fmt.Sprintf("✅ +%.1fL · Total hoy: %.1fL", parsed.Water.Liters, totalF.Float64)
 }

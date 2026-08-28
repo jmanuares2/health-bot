@@ -31,7 +31,7 @@ func main() {
 		log.Fatalf("get/create user: %v", err)
 	}
 
-	handlers := api.NewHandlers(queries, user.ID)
+	handlers := api.NewHandlers(queries, user)
 
 	r := gin.Default()
 	api.RegisterRoutes(r, handlers)

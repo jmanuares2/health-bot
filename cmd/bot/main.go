@@ -49,7 +49,7 @@ func main() {
 	parser := groq.NewParser()
 
 	// --- Bot handler ---
-	handler := bot.NewHandler(parser, pool, user.ID)
+	handler := bot.NewHandler(parser, pool, user)
 
 	// --- WhatsApp session store ---
 	sessionDir := os.Getenv("WHATSAPP_SESSION_DIR")
@@ -61,12 +61,12 @@ func main() {
 	}
 
 	dbLog := waLog.Stdout("Database", "WARN", true)
-	container, err := sqlstore.New("sqlite3", fmt.Sprintf("file:%s/whatsmeow.db?_foreign_keys=on", sessionDir), dbLog)
+	container, err := sqlstore.New(ctx, "sqlite3", fmt.Sprintf("file:%s/whatsmeow.db?_foreign_keys=on", sessionDir), dbLog)
 	if err != nil {
 		log.Fatalf("sqlstore: %v", err)
 	}
 
-	deviceStore, err := container.GetFirstDevice()
+	deviceStore, err := container.GetFirstDevice(ctx)
 	if err != nil {
 		log.Fatalf("get device: %v", err)
 	}
