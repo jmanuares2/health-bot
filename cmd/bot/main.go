@@ -18,8 +18,8 @@ import (
 	waLog "go.mau.fi/whatsmeow/util/log"
 	"google.golang.org/protobuf/proto"
 
-	dbpkg "github.com/jmanuares2/health-bot/internal/db"
 	"github.com/jmanuares2/health-bot/internal/bot"
+	dbpkg "github.com/jmanuares2/health-bot/internal/db"
 	"github.com/jmanuares2/health-bot/internal/groq"
 )
 
@@ -89,28 +89,14 @@ func main() {
 	client.AddEventHandler(func(evt interface{}) {
 		switch v := evt.(type) {
 		case *events.Message:
-			log.Printf("[DEBUG] msg from=%s chat=%s IsFromMe=%v text=%q",
-				v.Info.Sender, v.Info.Chat, v.Info.IsFromMe, extractText(v.Message))
-			// Only handle messages sent by the user themselves
-			if !v.Info.IsFromMe {
+			if !v.Info.IsFromMe || v.Info.Chat != groupJID {
 				return
 			}
-			// Log all group JIDs to help identify the target group
-			if v.Info.Chat.Server == "g.us" {
-				log.Printf("[JID] Message in group: %s", v.Info.Chat.String())
-			}
-			// Only in the configured group
-			log.Printf("[DEBUG] chat=%+v groupJID=%+v equal=%v", v.Info.Chat, groupJID, v.Info.Chat == groupJID)
-			if v.Info.Chat != groupJID {
-				return
-			}
-
 			text := extractText(v.Message)
 			if text == "" {
 				return
 			}
-
-			log.Printf("Handling message: %q", text)
+			log.Printf("message: %q", text)
 			go func(msg string) {
 				reply := handler.Handle(ctx, msg)
 				if reply == "" {
@@ -128,7 +114,6 @@ func main() {
 
 	// --- Connect or show QR ---
 	if client.Store.ID == nil {
-		// First time: show QR code
 		qrChan, _ := client.GetQRChannel(ctx)
 		if err := client.Connect(); err != nil {
 			log.Fatalf("connect: %v", err)
