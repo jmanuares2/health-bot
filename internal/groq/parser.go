@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	modelFast     = "llama-3.1-8b-instant"
-	modelFallback = "llama-3.3-70b-versatile"
+	modelFast     = "groq/compound-mini"
+	modelFallback = "groq/compound"
 	groqBaseURL   = "https://api.groq.com/openai/v1"
 )
 
