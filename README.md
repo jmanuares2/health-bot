@@ -4,6 +4,30 @@ Bot personal de WhatsApp para tracking de salud y fitness. Mandás mensajes en l
 
 ---
 
+## Estado del proyecto
+
+El core funcional del spec está implementado end-to-end (bot → LLM → DB → API → dashboard). Falta principalmente el deploy real y features de conveniencia.
+
+**Implementado**
+- [x] Bot de WhatsApp (whatsmeow) con login por QR, sesión persistida y filtro por grupo + `IsFromMe`
+- [x] Parser Groq con fallback a modelo grande cuando `confidence == "low"`
+- [x] Schema de DB y migraciones (6 tablas, según spec)
+- [x] Queries sqlc para food, strength, cardio, water y body_weight
+- [x] API REST con los 5 endpoints (`/today`, `/progress`, `/gym`, `/gym/:exercise`, `/body-weight`)
+- [x] Dashboard Next.js con las 3 vistas (Hoy, Progreso, Gym) conectadas a la API, con gráficos (Recharts)
+- [x] `docker-compose.yml` con los 5 servicios (postgres, bot, api, web, nginx) + nginx con Basic Auth
+- [x] Herramienta `groqtest` para probar el parser sin pasar por WhatsApp
+
+**Pendiente**
+- [ ] Deploy real en VPS (todo lo anterior corre local/Docker, no probado en producción)
+- [ ] Notificaciones diarias (resumen de calorías al final del día)
+- [ ] Comando `/resumen` para ver el día sin abrir el dashboard
+- [ ] Editar/eliminar registros ("borra la última comida")
+- [ ] Múltiples usuarios
+- [ ] Export de datos a CSV
+
+---
+
 ## Stack
 
 | Componente | Tecnología |
@@ -278,15 +302,4 @@ Envía 5 mensajes de ejemplo (con delay entre ellos por rate limit del free tier
 - **Un solo usuario** — no hay auth en la API, nginx protege la web con Basic Auth
 - **Groq fallback** — si `confidence == "low"`, reintenta con modelo más grande
 
----
-
-## Roadmap
-
-- [ ] Dashboard web funcional conectado a la API
-- [ ] Deployment en VPS con Docker Compose
-- [ ] Nginx + HTTP Basic Auth configurado
-- [ ] Notificaciones diarias (resumen de calorías al final del día)
-- [ ] Comando `/resumen` para ver el día actual sin necesidad del dashboard
-- [ ] Soporte para editar/eliminar registros ("borra la última comida")
-- [ ] Múltiples usuarios
-- [ ] Export de datos a CSV
+Ver [Estado del proyecto](#estado-del-proyecto) arriba para el detalle de qué falta.
